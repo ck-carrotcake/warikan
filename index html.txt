@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>割り勘 - 無料の割り勘・立替管理ツール</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #111; }
+.app { max-width: 520px; margin: 0 auto; padding: 1.5rem 1rem; }
+.section { background: #fff; border: 0.5px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+.section-title { font-size: 13px; color: #888; font-weight: 500; margin-bottom: 1rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.member-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip { display: flex; align-items: center; gap: 6px; background: #f5f5f5; border: 0.5px solid #e5e5e5; border-radius: 20px; padding: 4px 12px; font-size: 13px; }
+.chip-remove { cursor: pointer; color: #aaa; font-size: 16px; line-height: 1; }
+.chip-remove:hover { color: #111; }
+textarea { border: 0.5px solid #ddd; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fff; color: #111; width: 100%; outline: none; resize: none; font-family: inherit; line-height: 1.6; }
+textarea:focus { border-color: #999; }
+input, select { height: 36px; border: 0.5px solid #ddd; border-radius: 8px; padding: 0 12px; font-size: 14px; background: #fff; color: #111; width: 100%; outline: none; }
+input:focus, select:focus { border-color: #999; }
+button { height: 36px; border: 0.5px solid #ddd; border-radius: 8px; padding: 0 16px; font-size: 14px; background: transparent; color: #111; cursor: pointer; white-space: nowrap; }
+button:hover { background: #f5f5f5; }
+button.primary { background: #111; color: #fff; border-color: #111; }
+button.primary:hover { opacity: 0.85; }
+.payment-item { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+.payment-item select, .payment-item input { font-size: 13px; }
+.remove-btn { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; font-size: 18px; color: #aaa; border: none; }
+.remove-btn:hover { color: #111; background: #f5f5f5; }
+.result-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #eee; font-size: 14px; }
+.result-row:last-child { border-bottom: none; }
+.arrow { color: #aaa; margin: 0 8px; }
+.amount-text { font-weight: 500; }
+.empty { color: #aaa; font-size: 13px; text-align: center; padding: 1rem 0; }
+.add-btn { width: 100%; margin-top: 8px; }
+.metric { background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 1rem; }
+.metric-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+.metric-value { font-size: 20px; font-weight: 500; }
+.breakdown-row { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 0.5px solid #eee; color: #888; }
+.breakdown-row:last-child { border-bottom: none; }
+.breakdown-row span:last-child { color: #111; font-weight: 500; }
+.hint { font-size: 12px; color: #aaa; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div style="margin-bottom: 1.5rem;">
+    <p style="font-size: 22px; font-weight: 500; margin-bottom: 4px;">割り勘</p>
+    <p style="font-size: 14px; color: #888;">立替を記録して、誰がいくら払うか自動計算</p>
+  </div>
+  <div class="section">
+    <p class="section-title">メンバー（2〜20人）</p>
+    <div class="member-chips" id="chips"></div>
+    <textarea id="member-input" rows="3" placeholder="名前を1行ずつ入力&#10;田中&#10;佐藤&#10;鈴木"></textarea>
+    <p class="hint">1行に1人、改行して複数人まとめて追加できます</p>
+    <button onclick="addMembers()" style="width:100%; margin-top: 10px;">追加</button>
+  </div>
+  <div class="section">
+    <p class="section-title">支払い記録</p>
+    <div id="payments"></div>
+    <button class="add-btn" onclick="addPayment()">+ 支払いを追加</button>
+  </div>
+  <div class="section" id="result-section" style="display:none;">
+    <p class="section-title">精算結果</p>
+    <div class="metric">
+      <div class="metric-label">合計金額</div>
+      <div class="metric-value" id="total-amount">¥0</div>
+    </div>
+    <div id="results"></div>
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 0.5px solid #eee;">
+      <p style="font-size: 12px; color: #aaa; margin-bottom: 8px;">支払い内訳</p>
+      <div id="breakdown"></div>
+    </div>
+  </div>
+  <button class="primary" style="width:100%; margin-top: 0.5rem;" onclick="calculate()">精算する</button>
+</div>
+<script>
+let members = [], payments = [];
+
+function addMembers() {
+  const input = document.getElementById('member-input');
+  const lines = input.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  lines.forEach(name => {
+    if (!members.includes(name) && members.length < 20 && name.length <= 10) members.push(name);
+  });
+  input.value = '';
+  renderChips(); renderPayments();
+}
+
+function removeMember(name) {
+  members = members.filter(m => m !== name);
+  renderChips(); renderPayments();
+}
+
+function renderChips() {
+  const el = document.getElementById('chips');
+  el.innerHTML = members.length === 0
+    ? '<span style="font-size:13px;color:#aaa;">まだメンバーがいません</span>'
+    : members.map(m => `<div class="chip">${m}<span class="chip-remove" onclick="removeMember('${m}')">×</span></div>`).join('');
+}
+
+function addPayment() {
